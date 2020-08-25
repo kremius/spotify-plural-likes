@@ -24,6 +24,9 @@ from flask import Flask, session, request, redirect
 from flask_session import Session
 import spotipy
 import uuid
+import atexit
+
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(64)
@@ -70,7 +73,6 @@ def index():
 
 @app.route('/sign_out')
 def sign_out():
-    os.remove(session_cache_path())
     session.clear()
     try:
         # Remove the CACHE file (.cache-test) so that a new user can authorize.
@@ -101,6 +103,16 @@ def create_playlist():
     return spotify.user_playlist_create(me['id'], 'Test Robo Playlist', public=True, description='')
 
 
+def update_likes():
+    print('Updating likes...')
+
+
 def main():
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(func=update_likes, trigger="interval", seconds=3)
+    scheduler.start()
+
+    atexit.register(lambda: scheduler.shutdown())
+
     app.run(threaded=True, port=int(os.environ.get("PORT", 8080)))
 
