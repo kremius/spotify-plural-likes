@@ -82,7 +82,7 @@ def sign_out():
         # Remove the CACHE file (.cache-test) so that a new user can authorize.
         os.remove(session_cache_path())
     except OSError as e:
-        print("Error: %s - %s." % (e.filename, e.strerror))
+        app.logger.error("Error: %s - %s." % (e.filename, e.strerror))
     return redirect('/')
 
 
@@ -125,7 +125,7 @@ def main():
     }
     logging.basicConfig(**basic_config)
 
-    app.logger.info('=-------------------spotify-plural-likes startes-------------------=')
+    app.logger.info('=-------------------spotify-plural-likes started-------------------=')
 
     scheduler = BackgroundScheduler()
     scheduler.add_job(func=update_likes, trigger="interval", seconds=10)
@@ -135,4 +135,3 @@ def main():
 
     http_server = WSGIServer(('0.0.0.0', int(os.environ.get("PORT", 8080))), app, log=app.logger, error_log=app.logger)
     http_server.serve_forever()
-
