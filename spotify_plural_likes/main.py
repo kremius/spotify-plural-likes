@@ -27,6 +27,10 @@ import uuid
 import atexit
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from os import listdir
+
+import logging
+from gevent.pywsgi import WSGIServer
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(64)
@@ -82,16 +86,6 @@ def sign_out():
     return redirect('/')
 
 
-@app.route('/playlists')
-def playlists():
-    auth_manager = spotipy.oauth2.SpotifyOAuth(cache_path=session_cache_path())
-    if not auth_manager.get_cached_token():
-        return redirect('/')
-
-    spotify = spotipy.Spotify(auth_manager=auth_manager)
-    return spotify.current_user_playlists()
-
-
 @app.route('/create_playlist')
 def create_playlist():
     auth_manager = spotipy.oauth2.SpotifyOAuth(cache_path=session_cache_path())
@@ -103,16 +97,42 @@ def create_playlist():
     return spotify.user_playlist_create(me['id'], 'Test Robo Playlist', public=True, description='')
 
 
+def update_likes_for_user(user_uuid):
+    print(f'Updating likes for {user_uuid}')
+
+    path = caches_folder + user_uuid
+    auth_manager = spotipy.oauth2.SpotifyOAuth(cache_path=path)
+    if not auth_manager.get_cached_token():
+        return
+
+    spotify = spotipy.Spotify(auth_manager=auth_manager)
+
+    # TODO: maximum limit is 50, so offset is needed
+    playlists = spotify.current_user_playlists()
+    app.logger.info(playlists)
+
+
 def update_likes():
-    print('Updating likes...')
+    print('Updating likes')
+    for user_uuid in listdir(caches_folder):
+        update_likes_for_user(user_uuid)
 
 
 def main():
+    basic_config = {
+        'level': logging.INFO,
+        'format': '[%(levelname)s] [%(name)s] %(asctime)s: %(message)s'
+    }
+    logging.basicConfig(**basic_config)
+
+    app.logger.info('=-------------------spotify-plural-likes startes-------------------=')
+
     scheduler = BackgroundScheduler()
-    scheduler.add_job(func=update_likes, trigger="interval", seconds=3)
+    scheduler.add_job(func=update_likes, trigger="interval", seconds=10)
     scheduler.start()
 
     atexit.register(lambda: scheduler.shutdown())
 
-    app.run(threaded=True, port=int(os.environ.get("PORT", 8080)))
+    http_server = WSGIServer(('0.0.0.0', int(os.environ.get("PORT", 8080))), app, log=app.logger, error_log=app.logger)
+    http_server.serve_forever()
 
