@@ -120,7 +120,19 @@ def update_likes_for_user(user_uuid):
 
     playlists = playlists_data['items']
     for playlist in playlists:
-        app.logger.info(f"id: {playlist['id']}, name: {playlist['name']}, type: {playlist['type']}")
+        playlist_id = playlist['id']
+        app.logger.info(f"id: {playlist_id}, name: {playlist['name']}, type: {playlist['type']}")
+        tracks = []
+        offset = 0
+        while True:
+            tracks_data = spotify.playlist_tracks(
+                playlist_id, fields='items.track.id,items.track.name,next', offset=offset)
+            tracks_chunk = tracks_data['items']
+            tracks.extend(tracks_chunk)
+            offset += len(tracks_chunk)
+            if not tracks_data['next']:
+                break
+        app.logger.info(f'{len(tracks)}, {tracks}')
 
 
 def update_likes():
