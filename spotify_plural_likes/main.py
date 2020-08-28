@@ -108,8 +108,19 @@ def update_likes_for_user(user_uuid):
     spotify = spotipy.Spotify(auth_manager=auth_manager)
 
     # TODO: maximum limit is 50, so offset is needed
-    playlists = spotify.current_user_playlists()
-    app.logger.info(playlists)
+    playlists_data = spotify.current_user_playlists()
+    if not playlists_data:
+        app.logger.error('No playlists data!')
+        return
+
+    next_data = playlists_data['next']
+    if next_data:
+        app.logger.error("Too many playlists: it's needed to implement offset fetch")
+        return
+
+    playlists = playlists_data['items']
+    for playlist in playlists:
+        app.logger.info(f"id: {playlist['id']}, name: {playlist['name']}, type: {playlist['type']}")
 
 
 def update_likes():
