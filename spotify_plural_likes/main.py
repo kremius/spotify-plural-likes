@@ -195,7 +195,7 @@ def main():
     app.logger.info('=-------------------spotify-plural-likes started-------------------=')
 
     scheduler = BackgroundScheduler()
-    scheduler.add_job(func=update_likes, trigger="interval", seconds=10)
+    scheduler.add_job(func=update_likes, trigger="interval", seconds=60)
     scheduler.start()
 
     atexit.register(lambda: scheduler.shutdown())
