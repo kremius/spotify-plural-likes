@@ -97,6 +97,21 @@ def create_playlist():
     return spotify.user_playlist_create(me['id'], 'Test Robo Playlist', public=True, description='')
 
 
+def fetch_playlist_tracks(spotify, playlist_id):
+    app.logger.info(f"Fetching songs from playlist {playlist_id}")
+    tracks = []
+    offset = 0
+    while True:
+        tracks_data = spotify.playlist_tracks(
+            playlist_id, fields='items.track.id,items.track.name,next', offset=offset)
+        tracks_chunk = tracks_data['items']
+        tracks.extend(tracks_chunk)
+        offset += len(tracks_chunk)
+        if not tracks_data['next']:
+            break
+    return tracks
+
+
 def update_likes_for_user(user_uuid):
     print(f'Updating likes for {user_uuid}')
 
@@ -122,16 +137,7 @@ def update_likes_for_user(user_uuid):
     for playlist in playlists:
         playlist_id = playlist['id']
         app.logger.info(f"id: {playlist_id}, name: {playlist['name']}, type: {playlist['type']}")
-        tracks = []
-        offset = 0
-        while True:
-            tracks_data = spotify.playlist_tracks(
-                playlist_id, fields='items.track.id,items.track.name,next', offset=offset)
-            tracks_chunk = tracks_data['items']
-            tracks.extend(tracks_chunk)
-            offset += len(tracks_chunk)
-            if not tracks_data['next']:
-                break
+        tracks = fetch_playlist_tracks(spotify, playlist_id)
         app.logger.info(f'{len(tracks)}, {tracks}')
 
 
