@@ -150,7 +150,7 @@ def update_likes_for_user(user_uuid):
     liked_playlist = get_playlist_id_by_name(spotify, playlists, LIKED_PLAYLIST_NAME)
     app.logger.info(f'Liked playlist: {liked_playlist}')
 
-    new_tracks = set(fetch_playlist_tracks(spotify, liked_playlist))
+    new_tracks = fetch_playlist_tracks(spotify, liked_playlist)
     new_set = set(new_tracks)
     app.logger.info(new_set)
     likes_degree = ''
@@ -160,20 +160,23 @@ def update_likes_for_user(user_uuid):
         degree_playlist = get_playlist_id_by_name(spotify, playlists, likes_degree)
         degree_tracks = fetch_playlist_tracks(spotify, degree_playlist)
 
+        app.logger.info(f'Degree {likes_degree}, new tracks: {new_set}')
+
         degree_set = set(degree_tracks)
         not_in_degree = new_set - degree_set
         new_set = new_set - not_in_degree
 
-        app.logger.info(f'Degree {likes_degree}, new tracks: {new_set}')
-
         if len(not_in_degree) > 0:
-            # FIXME: add by 100 tracks
-            spotify.user_playlist_add_tracks(current_user_id, degree_playlist, list(not_in_degree))
+            to_add_list = list(not_in_degree)
+            # 100 - maximum amount tracks to add
+            for i in range(0, len(to_add_list), 100):
+                spotify.user_playlist_add_tracks(current_user_id, degree_playlist, to_add_list[i:i + 100])
 
-    result = spotify.user_playlist_remove_all_occurrences_of_tracks(
-        current_user_id, liked_playlist, new_tracks)
-    if not result:
-        app.logger.error('Unable to remove tracks from liked playlist!')
+    for i in range(0, len(new_tracks), 100):
+        result = spotify.user_playlist_remove_all_occurrences_of_tracks(
+            current_user_id, liked_playlist, new_tracks[i:i + 100])
+        if not result:
+            app.logger.error('Unable to remove tracks from liked playlist!')
 
 
 def update_likes():
