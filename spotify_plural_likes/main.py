@@ -11,12 +11,6 @@ Prerequisites
     export FLASK_ENV=development
     // so that you can invoke the app outside of the file's directory include
     export FLASK_APP=/path/to/spotipy/examples/app.py
-
-    // on Windows, use `SET` instead of `export`
-Run app.py
-    python3 -m flask run --port=8080
-    NOTE: If receiving "port already in use" error, try other ports: 5000, 8090, 8888, etc...
-        (will need to be updated in your Spotify app and SPOTIPY_REDIRECT_URI variable)
 """
 
 import os
@@ -31,6 +25,10 @@ from os import listdir
 
 import logging
 from gevent.pywsgi import WSGIServer
+
+LIKED_PLAYLIST_NAME = 'Extra Liked Songs'
+
+LIKE_SYMBOL = '💚'
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(64)
@@ -103,13 +101,26 @@ def fetch_playlist_tracks(spotify, playlist_id):
     offset = 0
     while True:
         tracks_data = spotify.playlist_tracks(
-            playlist_id, fields='items.track.id,items.track.name,next', offset=offset)
+            playlist_id, fields='items.track.id,next', offset=offset)
         tracks_chunk = tracks_data['items']
         tracks.extend(tracks_chunk)
         offset += len(tracks_chunk)
         if not tracks_data['next']:
             break
-    return tracks
+    return list(map(lambda a: a['track']['id'], tracks))
+
+
+def get_playlist_id_by_name(spotify, playlists, name):
+    for playlist in playlists:
+        if playlist['name'] == name:
+            return playlist['id']
+
+    playlist = spotify.user_playlist_create(spotify.me()['id'], name, public=True, description='')
+    if not playlist:
+        raise RuntimeError(f'Unable to create playlist {name}!')
+
+    playlists.append(playlist)
+    return playlist['id']
 
 
 def update_likes_for_user(user_uuid):
@@ -121,6 +132,7 @@ def update_likes_for_user(user_uuid):
         return
 
     spotify = spotipy.Spotify(auth_manager=auth_manager)
+    current_user_id = spotify.me()['id'];
 
     # TODO: maximum limit is 50, so offset is needed
     playlists_data = spotify.current_user_playlists()
@@ -134,11 +146,34 @@ def update_likes_for_user(user_uuid):
         return
 
     playlists = playlists_data['items']
-    for playlist in playlists:
-        playlist_id = playlist['id']
-        app.logger.info(f"id: {playlist_id}, name: {playlist['name']}, type: {playlist['type']}")
-        tracks = fetch_playlist_tracks(spotify, playlist_id)
-        app.logger.info(f'{len(tracks)}, {tracks}')
+
+    liked_playlist = get_playlist_id_by_name(spotify, playlists, LIKED_PLAYLIST_NAME)
+    app.logger.info(f'Liked playlist: {liked_playlist}')
+
+    new_tracks = set(fetch_playlist_tracks(spotify, liked_playlist))
+    new_set = set(new_tracks)
+    app.logger.info(new_set)
+    likes_degree = ''
+
+    while len(new_set) > 0:
+        likes_degree += LIKE_SYMBOL
+        degree_playlist = get_playlist_id_by_name(spotify, playlists, likes_degree)
+        degree_tracks = fetch_playlist_tracks(spotify, degree_playlist)
+
+        degree_set = set(degree_tracks)
+        not_in_degree = new_set - degree_set
+        new_set = new_set - not_in_degree
+
+        app.logger.info(f'Degree {likes_degree}, new tracks: {new_set}')
+
+        if len(not_in_degree) > 0:
+            # FIXME: add by 100 tracks
+            spotify.user_playlist_add_tracks(current_user_id, degree_playlist, list(not_in_degree))
+
+    result = spotify.user_playlist_remove_all_occurrences_of_tracks(
+        current_user_id, liked_playlist, new_tracks)
+    if not result:
+        app.logger.error('Unable to remove tracks from liked playlist!')
 
 
 def update_likes():
